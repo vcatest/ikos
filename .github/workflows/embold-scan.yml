@@ -26,31 +26,55 @@ jobs:
           # Fetch full history for accurate analysis
           fetch-depth: 0
 
-      # Step 5: Download and extract the Embold scanner
+      # Step 2: Install Dependencies (CMake is usually pre-installed, but good to ensure)
+      - name: Install Build Dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
+
+      # Step 3: Install Cppcheck 2.18.x from source
+      # Adapted from your Dockerfile snippet to run in GitHub Actions runner
+      - name: Install Cppcheck
+        run: |
+          echo "Cloning Cppcheck 2.18.x..."
+          git clone --branch 2.14 https://github.com/danmar/cppcheck.git cppcheck-src
+          
+          echo "Building Cppcheck..."
+          mkdir cppcheck-src/build
+          cd cppcheck-src/build
+          cmake ..
+          cmake --build . -- -j$(nproc)
+          sudo make install
+          
+          echo "Verifying installation..."
+          cppcheck --version
+          
+          # Cleanup to save space
+          cd ../..
+          rm -rf cppcheck-src
+
+      # Step 4: Download and extract the Embold scanner
       - name: Download and Extract Scanner
         run: |
           echo "Downloading Embold CLI scanner..."
           curl ${{ vars.EMBOLD_SCANNER_URL }} -o browserstack-codequality-scanner-archive.tar.gz
           tar xvf browserstack-codequality-scanner-archive.tar.gz
 
-      # Step 6: Download the repository configuration file
+      # Step 5: Download the repository configuration file
       - name: Download Repository Configuration
         run: |
           curl --silent --location --request GET "${{ vars.EMBOLD_URL_CPP }}/api/v1/repositories/${{ env.EMBOLD_REPO_ID }}/scans/config/download" \
-               --header "Authorization: Bearer ${{ secrets.EMBOLD_TOKEN_CPP }}" \
+               --header "Authorization: Bearer ${{ secrets.EMBOLD_TOKEN_CPP }}" \
                -o repository-configuration.json
 
-      # Step 7: Run the Embold analysis scanner
+      # Step 6: Run the Embold analysis scanner
       - name: Run Embold Scanner
         run: |
           echo "Starting Embold analysis..."
           ./browserstack-codequality-scanner/bin/embold-scanner analyse \
             -u ${{ vars.EMBOLD_URL_CPP }} \
-            -t ${{ secrets.EMBOLD_TOKEN_CPP }} \
+            -t ${{ secrets.EMBOLD_TOKEN_CPP }} \
             -r ${{ env.EMBOLD_REPO_ID }} \
             -b . \
             -d ./embold-data \
             -c ./repository-configuration.json \
             -l ./embold-log \
             -v
-          
